@@ -29,25 +29,37 @@ public class QuickSettingsTileService extends TileService {
 
     /**
      * NEW METHOD: Dynamically draws text onto a Tile Icon.
-     * This allows us to show decimals (e.g., "33.6") which don't have pre-made images.
+     * Features:
+     * 1. Adds Degree Symbol support.
+     * 2. Auto-scales text size so it never gets cut off.
      */
     private Icon createDynamicIcon(String text) {
-        // 1. Create a blank square bitmap (high resolution for crisp text)
+        // 1. Create a blank square bitmap (100x100 is a good balance of quality/performance)
         Bitmap bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
 
         // 2. Setup the paint (White text, Bold)
         Paint paint = new Paint();
-        paint.setColor(Color.WHITE); // QS Icons are tinted by the system, white is standard base
+        paint.setColor(Color.WHITE); 
         paint.setAntiAlias(true);
         paint.setTypeface(Typeface.DEFAULT_BOLD);
         paint.setTextAlign(Paint.Align.CENTER);
         
-        // 3. Adjust text size to fit decimals. 
-        // "33" fits easily at 60-70. "33.6" needs to be smaller, around 50.
-        paint.setTextSize(50f);
+        // 3. Auto-Size Logic: Start large and shrink until it fits
+        float textSize = 65f; // Start with a large size
+        paint.setTextSize(textSize);
+        
+        // The max width we allow the text to be (96px leaves 2px padding on each side)
+        final float maxWidth = 96f;
 
-        // 4. Calculate vertical center
+        // While the text is too wide, shrink the text size
+        while (paint.measureText(text) > maxWidth) {
+            textSize -= 1f;
+            paint.setTextSize(textSize);
+        }
+
+        // 4. Calculate vertical center so text is perfectly in the middle
+        // (ascent is negative, descent is positive)
         float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
 
         // 5. Draw the text
@@ -72,10 +84,10 @@ public class QuickSettingsTileService extends TileService {
         final int batteryState = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
 
         // MODIFICATION: Get exact decimal temperature
-        // Example: 336 -> 33.6
         final float tempFloat = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0f;
-        // Format to 1 decimal place (e.g., "33.6")
-        final String tempText = String.format(Locale.US, "%.1f", tempFloat);
+        
+        // MODIFICATION: Format with 1 decimal place AND the degree symbol (e.g., "33.6°")
+        final String tempText = String.format(Locale.US, "%.1f°", tempFloat);
 
         final boolean isPluggedIn = plugState == BatteryManager.BATTERY_PLUGGED_AC || plugState == BatteryManager.BATTERY_PLUGGED_USB || plugState == BatteryManager.BATTERY_PLUGGED_WIRELESS;
         final boolean isFullyCharged = isPluggedIn && batteryState == BatteryManager.BATTERY_STATUS_FULL;
