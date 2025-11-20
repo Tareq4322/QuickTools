@@ -12,8 +12,6 @@ import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.graphics.drawable.Icon;
 import android.os.BatteryManager;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.PowerManager;
 import android.provider.Settings;
 import android.service.quicksettings.Tile;
@@ -29,25 +27,12 @@ public class QuickSettingsTileService extends TileService {
     private boolean shouldEmulatePowerSaveTile = false;
     private boolean isCharging = false;
 
-    // NEW: Handler for the animation loop
-    private final Handler toggleHandler = new Handler(Looper.getMainLooper());
-    private boolean showWattage = false; // Toggle state
-    private Intent lastBatteryIntent = null; // Store the last known battery state
-
-    // NEW: Runnable that flips the state and updates the tile
-    private final Runnable toggleRunnable = new Runnable() {
-        @Override
-        public void run() {
-            showWattage = !showWattage; // Flip between Temp and Wattage
-            if (lastBatteryIntent != null) {
-                setBatteryInfo(lastBatteryIntent); // Redraw tile
-            }
-            // Schedule next flip in 2 seconds (2000ms)
-            toggleHandler.postDelayed(this, 2000);
-        }
-    };
-
+    /**
+     * Draws text onto the icon.
+     * Handles both single-line (Temp only) and multi-line (Temp + Wattage).
+     */
     private Icon createDynamicIcon(String text) {
+        // 100x100 canvas
         Bitmap bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         Paint paint = new Paint();
@@ -56,17 +41,41 @@ public class QuickSettingsTileService extends TileService {
         paint.setTypeface(Typeface.DEFAULT_BOLD);
         paint.setTextAlign(Paint.Align.CENTER);
 
-        float textSize = 65f;
-        paint.setTextSize(textSize);
-        final float maxWidth = 96f;
-
-        while (paint.measureText(text) > maxWidth) {
-            textSize -= 1f;
+        // CHECK: Do we have two lines? (e.g. "33°\n15W")
+        if (text.contains("\n")) {
+            String[] lines = text.split("\n");
+            
+            // Start with a smaller font size for stacked text
+            float textSize = 40f; 
             paint.setTextSize(textSize);
-        }
+            final float maxWidth = 98f; // Use full width
 
-        float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
-        canvas.drawText(text, canvas.getWidth() / 2f, yPos, paint);
+            // Shrink until BOTH lines fit
+            while (paint.measureText(lines[0]) > maxWidth || paint.measureText(lines[1]) > maxWidth) {
+                textSize -= 1f;
+                paint.setTextSize(textSize);
+            }
+
+            // Draw Top Line (Temperature) at Y=45 (approx top half)
+            canvas.drawText(lines[0], canvas.getWidth() / 2f, 45f, paint);
+            
+            // Draw Bottom Line (Wattage) at Y=90 (approx bottom half)
+            canvas.drawText(lines[1], canvas.getWidth() / 2f, 90f, paint);
+
+        } else {
+            // SINGLE LINE LOGIC (Large centered text)
+            float textSize = 65f;
+            paint.setTextSize(textSize);
+            final float maxWidth = 96f;
+
+            while (paint.measureText(text) > maxWidth) {
+                textSize -= 1f;
+                paint.setTextSize(textSize);
+            }
+
+            float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
+            canvas.drawText(text, canvas.getWidth() / 2f, yPos, paint);
+        }
 
         return Icon.createWithBitmap(bitmap);
     }
@@ -81,8 +90,6 @@ public class QuickSettingsTileService extends TileService {
     }
 
     private void setBatteryInfo(Intent intent) {
-        lastBatteryIntent = intent; // Save for the timer to use later
-
         final int batteryLevel = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
         final int plugState = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
         final int batteryState = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
@@ -91,31 +98,30 @@ public class QuickSettingsTileService extends TileService {
         final boolean isFullyCharged = isPluggedIn && batteryState == BatteryManager.BATTERY_STATUS_FULL;
         isCharging = batteryState == BatteryManager.BATTERY_STATUS_CHARGING;
 
-        // --- MODIFIED LOGIC START ---
-
+        // --- GENERATE ICON TEXT START ---
         String iconText;
+        
+        // 1. Get Temperature
+        final float tempFloat = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0f;
+        String tempText = String.format(Locale.US, "%.1f°", tempFloat);
 
-        // Logic: If Charging AND we are in the "Wattage" phase of the animation
-        if (isCharging && showWattage) {
-            // Calculate Wattage: (Voltage mV * Current µA) / 1,000,000,000
+        // 2. Get Wattage (only if charging)
+        if (isCharging) {
             BatteryManager manager = (BatteryManager) getSystemService(BATTERY_SERVICE);
             int currentMicroAmps = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
             int voltageMilliVolts = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
             
-            // Convert to absolute value (some phones report negative current for discharge)
             double currentAmps = Math.abs(currentMicroAmps) / 1000000.0;
             double voltageVolts = voltageMilliVolts / 1000.0;
             double wattage = currentAmps * voltageVolts;
 
-            // Format as "15W" or "15.5W"
-            iconText = String.format(Locale.US, "%.1fW", wattage);
+            // Combine: Temp on top, Wattage on bottom
+            iconText = tempText + "\n" + String.format(Locale.US, "%.1fW", wattage);
         } else {
-            // Otherwise (Discharging OR Temperature phase), show Temperature
-            final float tempFloat = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0f;
-            iconText = String.format(Locale.US, "%.1f°", tempFloat);
+            // Just Temp
+            iconText = tempText;
         }
-
-        // --- MODIFIED LOGIC END ---
+        // --- GENERATE ICON TEXT END ---
 
         if (isTappableTileEnabled) {
             getQsTile().setState(isCharging ? Tile.STATE_INACTIVE : (getSystemService(PowerManager.class).isPowerSaveMode() ? Tile.STATE_ACTIVE : Tile.STATE_INACTIVE));
@@ -134,7 +140,7 @@ public class QuickSettingsTileService extends TileService {
             }
         }
 
-        // Standard Tile Text Logic (Unchanged)
+        // Update Text Labels (Title/Subtitle)
         if (isFullyCharged) {
             final String customTileText = getSharedPreferences("preferences", MODE_PRIVATE).getString("charging_text", "");
             setActiveLabelText(customTileText.isEmpty() ? getString(R.string.fully_charged) : new TileTextFormatter(this).format(customTileText));
@@ -215,19 +221,6 @@ public class QuickSettingsTileService extends TileService {
 
         final Intent batteryChangedIntent = registerReceiver(batteryStateReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         
-        if (batteryChangedIntent != null) {
-            final int status = batteryChangedIntent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-            isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL;
-            
-            // Start animation loop if charging
-            toggleHandler.removeCallbacks(toggleRunnable);
-            if (isCharging) {
-                toggleHandler.post(toggleRunnable);
-            } else {
-                showWattage = false; // Reset to temp when not charging
-            }
-        }
-
         if (shouldEmulatePowerSaveTile) {
             unregisterReceiver(batteryStateReceiver);
             registerReceiver(powerSaveModeReceiver, new IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED));
@@ -281,9 +274,6 @@ public class QuickSettingsTileService extends TileService {
 
     @Override
     public void onStopListening() {
-        // IMPORTANT: Stop the animation when user closes the panel
-        toggleHandler.removeCallbacks(toggleRunnable);
-
         if (isTappableTileEnabled) {
             unregisterReceiver(powerSaveModeReceiver);
         }
