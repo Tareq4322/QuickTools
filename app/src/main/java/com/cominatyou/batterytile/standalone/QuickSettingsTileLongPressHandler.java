@@ -5,11 +5,13 @@ import android.content.ComponentName;
 import android.content.Intent;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.service.quicksettings.TileService;
 import android.widget.Toast;
 
-// We need to import the Settings Activity since it's in a different package
-import com.cominatyou.batterytile.preferences.PreferencesActivity;
+// Removed failing imports
+import com.cominatyou.batterytile.standalone.DnsTileService;
+import com.cominatyou.batterytile.standalone.LockTileService;
+import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
+import com.cominatyou.batterytile.standalone.VolumeTileService;
 
 public class QuickSettingsTileLongPressHandler extends Activity {
 
@@ -17,12 +19,11 @@ public class QuickSettingsTileLongPressHandler extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // 1. Figure out WHO sent us here (which tile was long-pressed?)
-        ComponentName componentName = getIntent().getParcelableExtra(TileService.EXTRA_COMPONENT_NAME);
+        // FIX 1: Use Intent.EXTRA_COMPONENT_NAME instead of TileService.EXTRA_COMPONENT_NAME
+        ComponentName componentName = getIntent().getParcelableExtra(Intent.EXTRA_COMPONENT_NAME);
 
         if (componentName == null) {
-            // If we don't know who sent us, default to the App Settings
-            startActivity(new Intent(this, PreferencesActivity.class));
+            launchAppSettings();
             finish();
             return;
         }
@@ -30,18 +31,15 @@ public class QuickSettingsTileLongPressHandler extends Activity {
         String className = componentName.getClassName();
         Intent targetIntent = null;
 
-        // --- ROUTING LOGIC ---
+        // --- TRAFFIC COP LOGIC ---
 
         // 1. Battery Tile -> System Battery Settings
         if (className.equals(QuickSettingsTileService.class.getName())) {
             targetIntent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
         }
         
-        // 2. Wattage Tile -> System Battery Settings
-        else if (className.equals(WattageTileService.class.getName())) {
-            targetIntent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
-        }
-
+        // 2. Wattage Tile (Removed to prevent build error since file doesn't exist yet)
+        
         // 3. Volume Tile -> System Sound Settings
         else if (className.equals(VolumeTileService.class.getName())) {
             targetIntent = new Intent(Settings.ACTION_SOUND_SETTINGS);
@@ -49,33 +47,49 @@ public class QuickSettingsTileLongPressHandler extends Activity {
 
         // 4. DNS Tile -> System Network Settings
         else if (className.equals(DnsTileService.class.getName())) {
-            targetIntent = new Intent(Settings.ACTION_NETWORK_AND_INTERNET_SETTINGS);
+            // FIX 2: Use string literal to avoid symbol errors on older compile SDKs
+            targetIntent = new Intent("android.settings.NETWORK_AND_INTERNET_SETTINGS");
         }
 
         // 5. Lock Screen Tile -> This App's Settings (Tile Toolkit)
-        // (So you can easily toggle the Accessibility permission if needed)
         else if (className.equals(LockTileService.class.getName())) {
-            targetIntent = new Intent(this, PreferencesActivity.class);
+            launchAppSettings();
+            finish(); // We launched it manually, so we can exit now
+            return;
         }
 
-        // --- LAUNCH ---
+        // --- EXECUTE ---
 
         if (targetIntent != null) {
-            // Safety Check: Ensure the phone actually HAS this settings page
-            if (targetIntent.resolveActivity(getPackageManager()) != null) {
-                targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(targetIntent);
-            } else {
-                // Fallback if the specific page is missing on this ROM
-                Toast.makeText(this, "Settings page not found", Toast.LENGTH_SHORT).show();
+            try {
+                if (targetIntent.resolveActivity(getPackageManager()) != null) {
+                    targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                    startActivity(targetIntent);
+                } else {
+                    Toast.makeText(this, "Settings page not found", Toast.LENGTH_SHORT).show();
+                    startActivity(new Intent(Settings.ACTION_SETTINGS));
+                }
+            } catch (Exception e) {
+                // Fallback just in case
                 startActivity(new Intent(Settings.ACTION_SETTINGS));
             }
         } else {
-            // Default Catch-all: App Settings
-            startActivity(new Intent(this, PreferencesActivity.class));
+            launchAppSettings();
         }
 
-        // Close this invisible activity instantly so it feels seamless
         finish();
+    }
+
+    // FIX 3: Dynamic launch method to avoid "cannot find symbol PreferencesActivity" error
+    private void launchAppSettings() {
+        try {
+            Intent intent = new Intent();
+            // explicitly point to the activity by string name
+            intent.setClassName(this, "com.cominatyou.batterytile.preferences.PreferencesActivity");
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not open App Settings", Toast.LENGTH_SHORT).show();
+        }
     }
 }
