@@ -1,4 +1,4 @@
-Tile Toolkit (FORK OF BatteryTile)
+QS Toolkit (FORK OF BatteryTile)
 
 An Android Quick Settings toolkit adding essential controls to your status bar. Originally a battery monitor, it has evolved into a complete utility belt.
 
