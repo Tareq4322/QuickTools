@@ -17,6 +17,7 @@
         android:theme="@style/Theme.BatteryTile"
         tools:targetApi="tiramisu">
 
+        <!-- Original Battery Tile -->
         <service android:name=".QuickSettingsTileService"
             android:label="@string/battery_tile_label"
             android:icon="@drawable/ic_qs_battery"
@@ -26,6 +27,17 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE"/>
             </intent-filter>
             <meta-data android:name="android.service.quicksettings.TOGGLEABLE_TILE" android:value="true"/>
+        </service>
+
+        <!-- NEW: Volume Tile Service -->
+        <service android:name=".VolumeTileService"
+            android:label="Volume"
+            android:icon="@drawable/ic_qs_battery"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
         </service>
 
         <activity android:name=".QuickSettingsTileLongPressHandler"
@@ -50,7 +62,5 @@
             tools:ignore="LockedOrientationActivity" />
 
     </application>
-
-
 
 </manifest>
