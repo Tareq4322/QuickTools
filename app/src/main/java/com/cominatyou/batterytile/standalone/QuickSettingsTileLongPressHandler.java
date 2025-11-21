@@ -3,15 +3,19 @@ package com.cominatyou.batterytile.standalone;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
-import android.net.Uri;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Toast;
 
+// Only importing the services to check names
 import com.cominatyou.batterytile.standalone.DnsTileService;
 import com.cominatyou.batterytile.standalone.LockTileService;
 import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
 import com.cominatyou.batterytile.standalone.VolumeTileService;
+
+import java.util.List;
 
 public class QuickSettingsTileLongPressHandler extends Activity {
 
@@ -21,126 +25,9 @@ public class QuickSettingsTileLongPressHandler extends Activity {
 
         ComponentName componentName = getIntent().getParcelableExtra(Intent.EXTRA_COMPONENT_NAME);
 
+        // If we don't know who sent us, open App Settings
         if (componentName == null) {
-            launchAppSettings();
-            finish();
-            return;
-        }
-
-        String className = componentName.getClassName();
-        Intent targetIntent = null;
-
-        // --- ROUTING LOGIC ---
-
-        // 1. Battery -> Battery Settings
-        if (className.equals(QuickSettingsTileService.class.getName())) {
-            targetIntent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
-        }
-
-        // 2. Volume -> Sound Settings
-        else if (className.equals(VolumeTileService.class.getName())) {
-            targetIntent = new Intent(Settings.ACTION_SOUND_SETTINGS);
-        }
-
-        // 3. DNS -> Network Settings
-        else if (className.equals(DnsTileService.class.getName())) {
-            targetIntent = new Intent("android.settings.NETWORK_AND_INTERNET_SETTINGS");
-        }
-
-        // 4. Lock Screen -> App Settings
-        else if (className.equals(LockTileService.class.getName())) {
-            launchAppSettings();
-            finish();
-            return;
-        }
-
-        // --- EXECUTE ---
-
-        if (targetIntent != null) {
-            try {
-                targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(targetIntent);
-            } catch (Exception e) {
-                // Fallback for DNS/Network
-                if (className.equals(DnsTileService.class.getName())) {
-                    try {
-                        Intent fallback = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
-                        fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                        startActivity(fallback);
-                    } catch (Exception ex) {
-                        launchAppSettings(); // Give up and show app settings
-                    }
-                } else {
-                    // Fallback for others: Main Settings
-                    try {
-                        startActivity(new Intent(Settings.ACTION_SETTINGS));
-                    } catch (Exception ex2) {
-                        launchAppSettings();
-                    }
-                }
-            }
-        } else {
-            launchAppSettings();
-        }
-
-        finish();
-    }
-
-    // --- THE FAIL-SAFE LAUNCHER ---
-    private void launchAppSettings() {
-        try {
-            // Plan A: Try the standard "Open Preferences" action defined in Manifest
-            Intent intent = new Intent("android.intent.action.APPLICATION_PREFERENCES");
-            intent.setPackage(getPackageName());
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-        } catch (Exception e) {
-            try {
-                // Plan B: Try explicit Class Name
-                Intent intent = new Intent();
-                intent.setClassName(getPackageName(), "com.cominatyou.batterytile.preferences.PreferencesActivity");
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                startActivity(intent);
-            } catch (Exception ex) {
-                // Plan C: The "Nuclear Option" - Open System App Info Page
-                // This ALWAYS works and lets you manage permissions/uninstall
-                try {
-                    Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                    intent.setData(Uri.fromParts("package", getPackageName(), null));
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    startActivity(intent);
-                    Toast.makeText(this, "Opening System App Info", Toast.LENGTH_SHORT).show();
-                } catch (Exception finalEx) {
-                    Toast.makeText(this, "Error: Could not open settings", Toast.LENGTH_SHORT).show();
-                }
-            }
-        }
-    }
-}package com.cominatyou.batterytile.standalone;
-
-import android.app.Activity;
-import android.content.ComponentName;
-import android.content.Intent;
-import android.os.Bundle;
-import android.provider.Settings;
-import android.widget.Toast;
-
-// Only importing the services we need to check against
-import com.cominatyou.batterytile.standalone.DnsTileService;
-import com.cominatyou.batterytile.standalone.LockTileService;
-import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
-import com.cominatyou.batterytile.standalone.VolumeTileService;
-
-public class QuickSettingsTileLongPressHandler extends Activity {
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
-        ComponentName componentName = getIntent().getParcelableExtra(Intent.EXTRA_COMPONENT_NAME);
-
-        if (componentName == null) {
-            launchAppSettings();
+            openAppSettings();
             finish();
             return;
         }
@@ -162,13 +49,13 @@ public class QuickSettingsTileLongPressHandler extends Activity {
 
         // 3. DNS Tile -> System Network Settings
         else if (className.equals(DnsTileService.class.getName())) {
-            // Try the specific Network & Internet page first
+            // Try specific Network page
             targetIntent = new Intent("android.settings.NETWORK_AND_INTERNET_SETTINGS");
         }
 
-        // 4. Lock Screen Tile -> App Settings (Tile Toolkit)
+        // 4. Lock Screen Tile -> This App's Settings
         else if (className.equals(LockTileService.class.getName())) {
-            launchAppSettings();
+            openAppSettings();
             finish();
             return;
         }
@@ -180,47 +67,62 @@ public class QuickSettingsTileLongPressHandler extends Activity {
                 targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 startActivity(targetIntent);
             } catch (Exception e) {
-                // ERROR HANDLER
+                // DNS Fallback: Wireless Settings
                 if (className.equals(DnsTileService.class.getName())) {
                     try {
-                        // Fallback for DNS
                         Intent fallback = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
                         fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                         startActivity(fallback);
                     } catch (Exception ex) {
-                        Toast.makeText(this, "Could not find Network Settings", Toast.LENGTH_SHORT).show();
+                        openAppSettings(); // Give up, show app settings
                     }
                 } else {
-                    // Fallback for others
+                    // General Fallback: Main Settings
                     try {
                         startActivity(new Intent(Settings.ACTION_SETTINGS));
                     } catch (Exception ex2) {
-                        launchAppSettings();
+                        Toast.makeText(this, "Could not open settings", Toast.LENGTH_SHORT).show();
                     }
                 }
             }
         } else {
-            launchAppSettings();
+            openAppSettings();
         }
 
         finish();
     }
 
-    // FIX: Explicitly point to the Preferences Activity by its full Java path.
-    // This bypasses import errors and package name confusion.
-    private void launchAppSettings() {
-        try {
-            Intent intent = new Intent();
-            // This string MUST match the package declaration inside PreferencesActivity.java
-            String settingsActivity = "com.cominatyou.batterytile.preferences.PreferencesActivity";
-            
-            intent.setClassName(this, settingsActivity);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-            startActivity(intent);
-        } catch (Exception e) {
-            // If this fails, it means the file PreferencesActivity.java was moved or renamed.
-            Toast.makeText(this, "Error: Could not find PreferencesActivity", Toast.LENGTH_LONG).show();
-            e.printStackTrace();
+    /**
+     * THE FIX: Ask the system to find our own Settings Activity.
+     * This works regardless of package names or folder structures.
+     */
+    private void openAppSettings() {
+        // 1. Create an intent that asks for "The Preferences page for THIS app"
+        Intent intent = new Intent("android.intent.action.APPLICATION_PREFERENCES");
+        intent.setPackage(getPackageName()); // Restrict search to our own app
+        
+        // 2. Ask PackageManager if it can find a matching activity
+        PackageManager pm = getPackageManager();
+        List<ResolveInfo> activities = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+
+        if (activities != null && !activities.isEmpty()) {
+            // 3. Found it! Grab the class name dynamically
+            ResolveInfo info = activities.get(0);
+            Intent launchIntent = new Intent();
+            launchIntent.setClassName(info.activityInfo.packageName, info.activityInfo.name);
+            launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(launchIntent);
+        } else {
+            // 4. If that fails, try the "App Info" page (Uninstall/Permissions page)
+            // This GUARANTEED to exist on every Android phone.
+            try {
+                Intent appInfoIntent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                appInfoIntent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                appInfoIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(appInfoIntent);
+            } catch (Exception e) {
+                Toast.makeText(this, "Error: Could not open App Settings", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }
