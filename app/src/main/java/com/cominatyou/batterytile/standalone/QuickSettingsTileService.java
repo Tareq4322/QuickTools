@@ -1,4 +1,4 @@
-Package com.cominatyou.batterytile.standalone;
+package com.cominatyou.batterytile.standalone;
 
 import android.annotation.SuppressLint;
 import android.content.BroadcastReceiver;
@@ -48,8 +48,7 @@ public class QuickSettingsTileService extends TileService {
     };
 
     /**
-     * Draws text onto the icon.
-     * Uses Condensed font to maximize size.
+     * Draws text onto the icon using custom logic to maximize size for decimals.
      */
     private Icon createDynamicIcon(String text) {
         Bitmap bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
@@ -57,30 +56,76 @@ public class QuickSettingsTileService extends TileService {
         Paint paint = new Paint();
         paint.setColor(Color.WHITE);
         paint.setAntiAlias(true);
-        
-        // USE CONDENSED FONT: Allows taller text that fits in the same width
         paint.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        
         paint.setTextAlign(Paint.Align.CENTER);
 
-        // Start even larger now that we are condensed
-        float textSize = 80f;
-        paint.setTextSize(textSize);
-        
-        // We allow it to go up to 98% width (1px padding on sides)
-        final float maxWidth = 98f;
+        // --- Custom Drawing for Temperature Precision ---
+        if (text.contains("°") && !text.contains("W")) {
+            // This is the temperature string, break it up: "33.6°"
+            
+            // 1. Separate whole number from decimal/degree
+            String[] parts = text.split("\\.");
+            String wholeNumber = parts[0]; // e.g., "33"
+            String decimalAndDegree = "." + parts[1]; // e.g., ".6°"
+            
+            // 2. Determine max size based on the short, whole number
+            float wholeNumberTextSize = 85f; // Start larger
+            paint.setTextSize(wholeNumberTextSize);
+            final float maxWidth = 98f;
 
-        while (paint.measureText(text) > maxWidth) {
-            textSize -= 1f;
+            while (paint.measureText(wholeNumber) > maxWidth) {
+                wholeNumberTextSize -= 1f;
+                paint.setTextSize(wholeNumberTextSize);
+            }
+            
+            // 3. Draw the maximized whole number
+            float xPos = canvas.getWidth() / 2f;
+            float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
+            
+            // Calculate starting X offset for centering
+            float totalWidth = paint.measureText(wholeNumber);
+            float startX = xPos - (totalWidth / 2f); 
+
+            canvas.drawText(wholeNumber, startX + (totalWidth / 2f), yPos, paint);
+
+            // 4. Draw the smaller decimal/degree
+            
+            // Determine end X position of the whole number
+            float endX = startX + totalWidth; 
+            
+            // Use a smaller font for the decimal/degree
+            float smallSize = wholeNumberTextSize * 0.6f;
+            Paint smallPaint = new Paint(paint);
+            smallPaint.setTextSize(smallSize);
+
+            // Slightly shift Y up for superscript effect
+            float smallYPos = yPos - (wholeNumberTextSize * 0.1f); 
+
+            // Draw the decimal/degree string
+            canvas.drawText(decimalAndDegree, endX + (smallPaint.measureText(decimalAndDegree) / 2f), smallYPos, smallPaint);
+
+        } else {
+            // --- Standard Drawing for Wattage/Discharge ---
+            
+            // Set shadow for visibility
+            paint.setShadowLayer(5f, 0f, 0f, Color.BLACK);
+            
+            float textSize = 80f;
             paint.setTextSize(textSize);
-        }
+            final float maxWidth = 98f;
 
-        float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
-        canvas.drawText(text, canvas.getWidth() / 2f, yPos, paint);
+            while (paint.measureText(text) > maxWidth) {
+                textSize -= 1f;
+                paint.setTextSize(textSize);
+            }
+
+            float yPos = (canvas.getHeight() / 2f) - ((paint.descent() + paint.ascent()) / 2f);
+            canvas.drawText(text, canvas.getWidth() / 2f, yPos, paint);
+        }
 
         return Icon.createWithBitmap(bitmap);
     }
-
+    
     private void setActiveLabelText(String text) {
         if (getSharedPreferences("preferences", Context.MODE_PRIVATE).getBoolean("infoInTitle", false)) {
             getQsTile().setLabel(text);
@@ -105,7 +150,7 @@ public class QuickSettingsTileService extends TileService {
         String iconText;
 
         // Only show wattage if we are charging AND the toggle says so
-        if (isCharging && showWattage) {
+        if (isCharging && getSharedPreferences("preferences", MODE_PRIVATE).getBoolean("percentage_as_icon", false) && showWattage) {
             BatteryManager manager = (BatteryManager) getSystemService(BATTERY_SERVICE);
             int currentMicroAmps = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
             int voltageMilliVolts = intent.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
@@ -224,7 +269,7 @@ public class QuickSettingsTileService extends TileService {
             
             // Kill any old timers first so we don't get double speed
             toggleHandler.removeCallbacks(toggleRunnable);
-            if (isCharging) {
+            if (isCharging && getSharedPreferences("preferences", MODE_PRIVATE).getBoolean("percentage_as_icon", false)) {
                 toggleHandler.post(toggleRunnable);
             } else {
                 showWattage = false; 
@@ -295,3 +340,4 @@ public class QuickSettingsTileService extends TileService {
         }
     }
 }
+
