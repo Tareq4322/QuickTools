@@ -2,13 +2,16 @@ package com.cominatyou.batterytile.standalone;
 
 import android.app.Activity;
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import com.cominatyou.batterytile.standalone.CaffeineTileService;
 import com.cominatyou.batterytile.standalone.DnsTileService;
 import com.cominatyou.batterytile.standalone.LockTileService;
 import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
@@ -40,10 +43,12 @@ public class QuickSettingsTileLongPressHandler extends Activity {
         if (className.equals(QuickSettingsTileService.class.getName())) {
             targetIntent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
         }
-
-        // 2. Volume Tile -> System Sound Settings
+        
+        // 2. Volume Tile -> TOGGLE RINGER MODE (Updated Logic)
         else if (className.equals(VolumeTileService.class.getName())) {
-            targetIntent = new Intent(Settings.ACTION_SOUND_SETTINGS);
+            toggleRingerMode();
+            finish(); // Close immediately, no UI needed
+            return;
         }
 
         // 3. DNS Tile -> System Network Settings
@@ -57,8 +62,11 @@ public class QuickSettingsTileLongPressHandler extends Activity {
             finish();
             return;
         }
-
-        // REMOVED: Caffeine Tile logic (Service deleted)
+        
+        // 5. Caffeine Tile -> Display Settings (Restored logic)
+        else if (className.equals(CaffeineTileService.class.getName())) {
+            targetIntent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
+        }
 
         // --- EXECUTE ---
 
@@ -89,6 +97,29 @@ public class QuickSettingsTileLongPressHandler extends Activity {
         }
 
         finish();
+    }
+
+    // NEW: Helper to toggle between Vibrate and Ring
+    private void toggleRingerMode() {
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        
+        try {
+            int currentMode = audioManager.getRingerMode();
+
+            if (currentMode == AudioManager.RINGER_MODE_NORMAL) {
+                // Switch to Vibrate
+                audioManager.setRingerMode(AudioManager.RINGER_MODE_VIBRATE);
+                Toast.makeText(this, "📳 Vibrate Mode", Toast.LENGTH_SHORT).show();
+            } else {
+                // Switch to Normal (Ring)
+                // This handles Vibrate -> Normal AND Silent -> Normal
+                audioManager.setRingerMode(AudioManager.RINGER_MODE_NORMAL);
+                Toast.makeText(this, "🔔 Ringer Mode", Toast.LENGTH_SHORT).show();
+            }
+        } catch (SecurityException e) {
+            // Fallback for Do Not Disturb permission issues
+            Toast.makeText(this, "Check DND Permissions", Toast.LENGTH_LONG).show();
+        }
     }
 
     // Robust method to find the App Settings page dynamically
