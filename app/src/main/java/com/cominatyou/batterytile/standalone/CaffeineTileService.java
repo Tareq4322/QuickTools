@@ -41,6 +41,34 @@ public class CaffeineTileService extends TileService {
             if (KeepAwakeService.isRunning) {
                 stopService(intent);
             } else {
+                // Wrapped in try-catch to handle background start restrictions
+                startForegroundService(intent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Could not start Caffeine service", Toast.LENGTH_SHORT).show();
+            // Reset visual state if it failed
+            updateTile();
+        }
+        
+        // Optimistic update
+        updateTile();
+    }
+
+    public static void requestUpdate(Context context) {
+        try {
+            requestListeningState(context, new ComponentName(context, CaffeineTileService.class));
+        } catch (Exception e) {
+            // Tile might not be active
+        }
+    }
+}    public void onClick() {
+        Intent intent = new Intent(this, KeepAwakeService.class);
+
+        try {
+            if (KeepAwakeService.isRunning) {
+                stopService(intent);
+            } else {
                 // FIX: Wrapped in try-catch to handle background start restrictions
                 startForegroundService(intent);
             }
