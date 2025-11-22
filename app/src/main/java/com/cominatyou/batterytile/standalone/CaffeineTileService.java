@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.graphics.drawable.Icon;
 import android.service.quicksettings.Tile;
 import android.service.quicksettings.TileService;
+import android.widget.Toast;
 
 public class CaffeineTileService extends TileService {
 
@@ -21,7 +22,6 @@ public class CaffeineTileService extends TileService {
         tile.setLabel("Caffeine");
         tile.setIcon(Icon.createWithResource(this, R.drawable.ic_coffee));
 
-        // Check the static flag in our Service to see if it's running
         if (KeepAwakeService.isRunning) {
             tile.setState(Tile.STATE_ACTIVE);
             tile.setSubtitle("On");
@@ -35,6 +35,34 @@ public class CaffeineTileService extends TileService {
 
     @Override
     public void onClick() {
+        Intent intent = new Intent(this, KeepAwakeService.class);
+
+        try {
+            if (KeepAwakeService.isRunning) {
+                stopService(intent);
+            } else {
+                // FIX: Wrapped in try-catch to handle background start restrictions
+                startForegroundService(intent);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Could not start Caffeine service", Toast.LENGTH_SHORT).show();
+            // Reset visual state if it failed
+            updateTile();
+        }
+        
+        // Optimistic update
+        updateTile();
+    }
+
+    public static void requestUpdate(Context context) {
+        try {
+            requestListeningState(context, new ComponentName(context, CaffeineTileService.class));
+        } catch (Exception e) {
+            // Tile might not be active
+        }
+    }
+}    public void onClick() {
         Intent intent = new Intent(this, KeepAwakeService.class);
 
         if (KeepAwakeService.isRunning) {
