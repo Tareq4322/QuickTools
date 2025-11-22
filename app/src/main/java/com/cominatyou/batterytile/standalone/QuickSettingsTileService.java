@@ -59,7 +59,7 @@ public class QuickSettingsTileService extends TileService {
         paint.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
         paint.setTextAlign(Paint.Align.CENTER);
 
-        // --- Custom Drawing for Temperature Precision ---
+        // --- Custom Drawing for Temperature Precision (Superscript Hack) ---
         if (text.contains("°") && !text.contains("W")) {
             // This is the temperature string, break it up: "33.6°"
             
@@ -105,10 +105,7 @@ public class QuickSettingsTileService extends TileService {
             canvas.drawText(decimalAndDegree, endX + (smallPaint.measureText(decimalAndDegree) / 2f), smallYPos, smallPaint);
 
         } else {
-            // --- Standard Drawing for Wattage/Discharge ---
-            
-            // Set shadow for visibility
-            paint.setShadowLayer(5f, 0f, 0f, Color.BLACK);
+            // --- Standard Drawing for Wattage/Discharge (No Shadow) ---
             
             float textSize = 80f;
             paint.setTextSize(textSize);
@@ -163,6 +160,7 @@ public class QuickSettingsTileService extends TileService {
         } else {
             // Otherwise show temperature (Discharging or Temp phase)
             final float tempFloat = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) / 10.0f;
+            // Kept original decimal precision for the icon
             iconText = String.format(Locale.US, "%.1f°", tempFloat);
         }
         // -----------------------
@@ -339,5 +337,4 @@ public class QuickSettingsTileService extends TileService {
             unregisterReceiver(batteryStateReceiver);
         }
     }
-}
-
+                                                        }
