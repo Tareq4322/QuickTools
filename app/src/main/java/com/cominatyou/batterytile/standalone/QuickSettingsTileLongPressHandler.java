@@ -15,7 +15,6 @@ import com.cominatyou.batterytile.standalone.DnsTileService;
 import com.cominatyou.batterytile.standalone.LockTileService;
 import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
 import com.cominatyou.batterytile.standalone.VolumeTileService;
-import com.cominatyou.batterytile.standalone.DataSimTileService;
 
 import java.util.List;
 
