@@ -15,6 +15,7 @@ import com.cominatyou.batterytile.standalone.DnsTileService;
 import com.cominatyou.batterytile.standalone.LockTileService;
 import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
 import com.cominatyou.batterytile.standalone.VolumeTileService;
+import com.cominatyou.batterytile.standalone.DataSimTileService;
 
 import java.util.List;
 
@@ -60,6 +61,12 @@ public class QuickSettingsTileLongPressHandler extends Activity {
             openAppSettings();
             finish();
             return;
+            
+        }
+
+                // 5. Data SIM Tile -> Wireless Settings (Long press fallback)
+        else if (className.equals(DataSimTileService.class.getName())) {
+            targetIntent = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
         }
         
         // --- EXECUTE ---
