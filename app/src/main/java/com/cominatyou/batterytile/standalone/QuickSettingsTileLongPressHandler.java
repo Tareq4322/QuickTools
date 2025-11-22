@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Toast;
 
+import com.cominatyou.batterytile.standalone.CaffeineTileService;
 import com.cominatyou.batterytile.standalone.DnsTileService;
 import com.cominatyou.batterytile.standalone.LockTileService;
 import com.cominatyou.batterytile.standalone.QuickSettingsTileService;
@@ -22,6 +23,8 @@ public class QuickSettingsTileLongPressHandler extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Get the component name of the tile that triggered this activity
+        // using Intent.EXTRA_COMPONENT_NAME to avoid build errors on some SDKs
         ComponentName componentName = getIntent().getParcelableExtra(Intent.EXTRA_COMPONENT_NAME);
 
         if (componentName == null) {
@@ -35,26 +38,31 @@ public class QuickSettingsTileLongPressHandler extends Activity {
 
         // --- ROUTING LOGIC ---
 
-        // 1. Battery -> Battery Settings
+        // 1. Battery Tile -> System Battery Settings
         if (className.equals(QuickSettingsTileService.class.getName())) {
             targetIntent = new Intent(Intent.ACTION_POWER_USAGE_SUMMARY);
         }
 
-        // 2. Volume -> Sound Settings
+        // 2. Volume Tile -> System Sound Settings
         else if (className.equals(VolumeTileService.class.getName())) {
             targetIntent = new Intent(Settings.ACTION_SOUND_SETTINGS);
         }
 
-        // 3. DNS -> Network Settings
+        // 3. DNS Tile -> System Network Settings
         else if (className.equals(DnsTileService.class.getName())) {
             targetIntent = new Intent("android.settings.NETWORK_AND_INTERNET_SETTINGS");
         }
 
-        // 4. Lock Screen -> App Settings
+        // 4. Lock Screen Tile -> App Settings (to manage Accessibility)
         else if (className.equals(LockTileService.class.getName())) {
             openAppSettings();
             finish();
             return;
+        }
+
+        // 5. Caffeine Tile -> Display Settings (Screen Timeout)
+        else if (className.equals(CaffeineTileService.class.getName())) {
+            targetIntent = new Intent(Settings.ACTION_DISPLAY_SETTINGS);
         }
 
         // --- EXECUTE ---
@@ -64,7 +72,7 @@ public class QuickSettingsTileLongPressHandler extends Activity {
                 targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 startActivity(targetIntent);
             } catch (Exception e) {
-                // Fallback logic
+                // Fallbacks
                 if (className.equals(DnsTileService.class.getName())) {
                     try {
                         Intent fallback = new Intent(Settings.ACTION_WIRELESS_SETTINGS);
